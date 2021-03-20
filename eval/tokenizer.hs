@@ -13,26 +13,31 @@ data Token = ValueToken Integer
            | ParenthesisRight
            deriving Show
 
+
+tokenizeValue :: String -> [Token]
+tokenizeValue [] = []
+tokenizeValue digits = [ValueToken (read digits :: Integer)]
+
+
+tokenizeSymbols :: String -> [Token]
+tokenizeSymbols [] = []
+tokenizeSymbols [' '] = []
+tokenizeSymbols ['+'] = [ArithmeticToken Plus]
+tokenizeSymbols ['-'] = [ArithmeticToken Minus]
+tokenizeSymbols ['*'] = [ArithmeticToken Star]
+tokenizeSymbols ['/'] = [ArithmeticToken Slash]
+tokenizeSymbols ['('] = [ParenthesisLeft]
+tokenizeSymbols [')'] = [ParenthesisRight]
+tokenizeSymbols [unknown]
+    | isSpace unknown = []
+    | otherwise = error $ "Invalid token " ++ [unknown]
+tokenizeSymbols (x:xs)
+    | isSpace x = tokenize xs
+    | otherwise = tokenizeSymbols [x] ++ tokenize xs
+
+
 tokenize :: String -> [Token]
 tokenize s = tokenizeValue valueStr ++ tokenizeSymbols symbolicStr where
     spanStr = span isDigit s
     valueStr = fst spanStr
     symbolicStr = snd spanStr
-    tokenizeValue :: String -> [Token]
-    tokenizeValue [] = []
-    tokenizeValue digits = [ValueToken (read digits :: Integer)]
-    tokenizeSymbols :: String -> [Token]
-    tokenizeSymbols [] = []
-    tokenizeSymbols [' '] = []
-    tokenizeSymbols ['+'] = [ArithmeticToken Plus]
-    tokenizeSymbols ['-'] = [ArithmeticToken Minus]
-    tokenizeSymbols ['*'] = [ArithmeticToken Star]
-    tokenizeSymbols ['/'] = [ArithmeticToken Slash]
-    tokenizeSymbols ['('] = [ParenthesisLeft]
-    tokenizeSymbols [')'] = [ParenthesisRight]
-    tokenizeSymbols [unknown]
-        | isSpace unknown = []
-        | otherwise = error $ "Invalid token " ++ [unknown]
-    tokenizeSymbols (x:xs)
-        | isSpace x = tokenize xs
-        | otherwise = tokenizeSymbols [x] ++ tokenize xs

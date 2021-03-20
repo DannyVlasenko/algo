@@ -1,80 +1,92 @@
 module AST where
 
+import Text.Show
 import Tokenizer
+import Data.List ( uncons )
 
 -- expr -> expr + term | expr - term | term
 -- term -> term * factor | term / factor | factor
 -- factor -> value | (expr)
 
 data UnaryOp = UnaryPlus | UnaryMinus
+    deriving Show
+
 data BinaryOp = Add | Sub | Mul | Div
-data EvalTree = ValueNode Integer 
-              | UnaryOpNode UnaryOp EvalTree 
+    deriving Show
+
+data EvalTree = ValueNode Integer
+              | UnaryOpNode UnaryOp EvalTree
               | BinaryOpNode BinaryOp EvalTree EvalTree
               deriving Show
 
 
-isPlusMinus :: Token -> Boolean
-isPlusMinus (ArithmeticToken Plus) = True 
-isPlusMinus (ArithmeticToken Minus) = True 
-isPlusMinus _ = False 
+isPlusMinus :: Token -> Bool
+isPlusMinus (ArithmeticToken Plus) = True
+isPlusMinus (ArithmeticToken Minus) = True
+isPlusMinus _ = False
 
 
-unaryOp :: ArithmeticToken -> UnaryOp
-unaryOp (ArithmeticSign Plus) = UnaryPlus
-unaryOp (ArithmeticSign Minus) = UnaryMinus
+isStarSlash :: Token -> Bool
+isStarSlash (ArithmeticToken Star) = True
+isStarSlash (ArithmeticToken Slash) = True
+isStarSlash _ = False
 
 
-binaryOp :: ArithmeticToken -> BinaryOp
-binaryOp (ArithmeticSign Plus) = Add
-binaryOp (ArithmeticSign Minus) = Sub
-binaryOp (ArithmeticSign Star) = Mul
-binaryOp (ArithmeticSign Slash) = Div
+unaryOp :: ArithmeticSign  -> UnaryOp
+unaryOp Plus = UnaryPlus
+unaryOp Minus = UnaryMinus
 
 
-makeNode :: Maybe ArithmeticToken -> Maybe EvalTree -> Maybe EvalTree -> Maybe EvalTree
-makeNode Nothing Nothing Nothing = Nothing
-makeNode Nothing _ _ = error "Unexpected expression tokens without operation sign."
-makeNode (ArithmeticSign sign) (Just left) Nothing = UnaryOpNode (unaryOp sign) left
-makeNode (ArithmeticSign sign) Nothing (Just right) = UnaryOpNode (unaryOp sign) right
-makeNode (ArithmeticSign sign) (Just left) (Just right) = BinaryOpNode (binaryOp sign) left right
+binaryOp :: ArithmeticSign -> BinaryOp
+binaryOp Plus = Add
+binaryOp Minus = Sub
+binaryOp Star = Mul
+binaryOp Slash = Div
 
 
-factor :: [Token] -> Maybe EvalTree
-factor [] = Nothing
-factor [ValueToken value] = ValueNode value
+makeBinary :: Token -> EvalTree -> EvalTree -> EvalTree
+makeBinary (ArithmeticToken sign) = BinaryOpNode (binaryOp sign)
 
 
-term :: [Token] -> Maybe EvalTree
-term [] = Nothing
-term [a] = factor a
-term tokens = 
-
-expr :: [Token] -> Maybe EvalTree
-expr [] = Nothing
-expr tokens = makeNode sign (term firstTerm) restExpr 
-    where
-        firstAndRest = span (not . isPlusMinus) tokens
-        firstTerm = fst firstAndRest
+splitBySign :: (Token -> Bool) -> ([Token] -> EvalTree) -> ([Token] -> EvalTree) -> [Token] -> EvalTree
+splitBySign signPred leftFunc rightFunc tokens = 
+    let firstAndRest = break signPred tokens
+        first = fst firstAndRest
         rest = snd firstAndRest
-        signAndExpr = uncons rest
-        sign = signAndExpr >>= fst
-        restExpr = signAndExpr >>= snd >>= expr     
+    in case rest of 
+        [] -> rightFunc first
+        _ -> makeBinary sign term expr
+            where
+                sign = head rest
+                term = termTree first
+                extract [] = error "Unexpected sign token without parameter."
+                extract exprTokens = leftFunc . tail $ exprTokens
+                expr = extract rest 
 
 
-applyUnary :: UnaryOp -> Integer -> Integer
-applyUnary UnaryPlus a = a
-applyUnary UnaryMinus a = negate a
+-- expr -> expr + term | expr - term | term
+splitExpr :: [Token] -> EvalTree
+splitExpr = splitBySign isPlusMinus exprTree termTree
+
+-- term -> term * factor | term / factor | factor
+splitTerm :: [Token] -> EvalTree
+splitTerm = splitBySign isStarSlash termTree factorTree
 
 
-applyBinary :: BinaryOp -> Integer -> Integer -> Integer
-applyBinary Add a b = a + b
-applyBinary Sub a b = a - b
-applyBinary Mul a b = a * b
-applyBinary Div a b = div a b
+factorTree :: [Token] -> EvalTree
+factorTree [ValueToken value] = ValueNode value
 
 
-eval :: EvalTree -> Integer
-eval (ValueNode val) = val
-eval (UnaryOpNode op child) = applyUnary op . eval $ child
-eval (BinaryOpNode op left right) = applyBinary op (eval left) (eval right)
+termTree :: [Token] -> EvalTree
+termTree [a] = factorTree [a]
+termTree tokens = splitTerm tokens
+
+
+exprTree :: [Token] -> EvalTree
+exprTree [a] = termTree [a]
+exprTree tokens = splitExpr tokens
+
+
+buildTree :: [Token] -> Maybe EvalTree
+buildTree [] = Nothing
+buildTree tokens = Just . exprTree $ tokens
