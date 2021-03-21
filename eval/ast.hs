@@ -50,41 +50,40 @@ makeBinary (ArithmeticToken sign) = BinaryOpNode (binaryOp sign)
 
 splitBySign :: (Token -> Bool) -> ([Token] -> EvalTree) -> ([Token] -> EvalTree) -> [Token] -> EvalTree
 splitBySign signPred leftFunc rightFunc tokens = 
-    let firstAndRest = break signPred tokens
-        first = fst firstAndRest
-        rest = snd firstAndRest
-    in case rest of 
-        [] -> rightFunc first
-        _ -> makeBinary sign term expr
+    let lastAndRest = break signPred . reverse $ tokens
+        lst = reverse. fst $ lastAndRest
+        rst = snd lastAndRest
+    in case rst of 
+        [] -> rightFunc lst
+        _ -> BinaryOpNode (binaryOp sign) leftSplit rightSplit
             where
-                sign = head rest
-                term = termTree first
+                (ArithmeticToken sign) = head rst
+                rightSplit = rightFunc lst
                 extract [] = error "Unexpected sign token without parameter."
-                extract exprTokens = leftFunc . tail $ exprTokens
-                expr = extract rest 
+                extract leftTokens = leftFunc . init . reverse $ leftTokens
+                leftSplit = extract rst 
 
 
 -- expr -> expr + term | expr - term | term
 splitExpr :: [Token] -> EvalTree
 splitExpr = splitBySign isPlusMinus exprTree termTree
 
+exprTree :: [Token] -> EvalTree
+exprTree [a] = termTree [a]
+exprTree tokens = splitExpr tokens
+
+
 -- term -> term * factor | term / factor | factor
 splitTerm :: [Token] -> EvalTree
 splitTerm = splitBySign isStarSlash termTree factorTree
-
-
-factorTree :: [Token] -> EvalTree
-factorTree [ValueToken value] = ValueNode value
-
 
 termTree :: [Token] -> EvalTree
 termTree [a] = factorTree [a]
 termTree tokens = splitTerm tokens
 
 
-exprTree :: [Token] -> EvalTree
-exprTree [a] = termTree [a]
-exprTree tokens = splitExpr tokens
+factorTree :: [Token] -> EvalTree
+factorTree [ValueToken value] = ValueNode value
 
 
 buildTree :: [Token] -> Maybe EvalTree
